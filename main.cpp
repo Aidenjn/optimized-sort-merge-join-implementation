@@ -8,23 +8,49 @@
 #include <bitset>
 #include <math.h>
 
+// Constants
+const int BUFFER_SIZE = 22;
+
 using namespace std;
 
-// Struct for holding records
-struct record {
-  string id; // Fixed at 8 bytes
-  string name; // Max of 200 bytes
-  string bio; // Max of 500 bytes
-  string manager_id; // Fixed at 8 bytes
+// Struct for holding department records
+struct deptRecord {
+  int did; // 4 bytes
+  string dname; // 40 bytes 
+  double budget; // 8 bytes
+  string managerid; // 4 bytes
+};
+
+// Struct for holding employee records
+struct empRecord {
+  int eid; // 4 bytes
+  string ename; // 40 bytes 
+  int age; // 4 bytes
+  double salary; // 8 bytes
 };
 
 // Global Variables
-int buckets; // amount of buckets currently in the index
-int bitRep; // amount of bits currently being used in the keys
-int totalSpaceUsed; // amount of bytes the records are taking up
+//int buckets; // amount of buckets currently in the index
+//int bitRep; // amount of bits currently being used in the keys
+//int totalSpaceUsed; // amount of bytes the records are taking up
+int empRecordCount;
+int deptRecordCount;
+
 
 // Function prototypes
-void processRecords(string csvName);
+// void processRecords(string csvName);
+void runSortEmpRecords(int m); // Sorts files into runs of m length
+void runSortDeptRecords(int m); // Sorts files into runs of m length  
+void merge(int m); // Merges files that are sorted into runs of m length
+
+struct empRecord getEmpRecord(int index);
+
+int countLinesOfFile(string filename);
+string getLineOfFile(string fileName, int lineNumber);
+void addLineToEOF(string filename, string newLine);
+
+// Old prototypes !!! DELETE !!!
+
 void createIndex();
 void lookupId(string id);
 struct record* add_record(string id, string name, string bio, string manager_id); 
@@ -48,115 +74,74 @@ void handleFlippedKeyValues(string key);
 
 int main(int argc, char* argv[])
 {
-    if (argc < 2) {
-        cerr << "Usage: " << endl;
-        cerr << "For tuple lookup: " << argv[0] << " -L [ID]" << endl;
-        cerr << "Tuple lookup example: " << argv[0] << " -L 4" << endl;
-        cerr << "For index creation: " << argv[0] << " -C" << endl;
-        return 1;
-    }
-    cout << "Correct number of arguments given" << endl;
 
-    string mode = argv[1];
+    // Calculate M
+    int m = BUFFER_SIZE - 2; // -2 because reserving space for output and double buffer
 
-    if (mode ==  "-C") { // Create table mode
-        createIndex();
-    }
-    else if (mode ==  "-L") { // Lookup mode 
-        string id = argv[2];
-        lookupId(id);
-    }
+    // Sort Dept records
+    runSortDeptRecords(m);
+    
+    // Sort Emp records
+    runSortEmpRecords(m);
+    
+    // Merge on Dept.managerid = Emp.eid
+    merge(m);
 
     return 0;
 }
 
-void createIndex() {
-    cout << "Creating index from csv file..." << endl;
-
-    // initialize with two buckets
-    initIndex();
-    bitRep = 1;
-    buckets = 2;
-    totalSpaceUsed = 0;
-
-    processRecords("Employee.csv");
-    cout << "Index Created!" << endl;
+bool compareEid(const empRecord &a, const empRecord &b) {
+    return a.eid < b.eid;
 }
 
-void lookupId(string id) {
-    cout << "Looking up " << id << " in index data..." << endl;
-    bool foundID = false;
-    
-    // Find amount of bits used to represent keys
-    int keySize = 0;
-    string firstLine = getLineOfIndex(1); // get first line of index
-    char c;
-    do {
-        c = firstLine[keySize];
-        keySize++;
-    } while (c != '|');
-    keySize--; // don't include delimeter in character count
-    bitRep = keySize;
-    buckets = countLinesOfIndex();
+void runSortEmpRecords(int m) {
+    //struct empRecord curRec = getNextEmpRecord();
+    struct empRecord outRec;
+    int curRecNum = 0;
+    vector<struct empRecord> run = vector<struct empRecord>();
 
-    // createkey from id
-    string key = idToIndexKey(id);
+    int empLines = countLinesOfFile("Emp.csv");
 
-    // Print info
-    cout << "Key: " << key << endl;
-    cout << "Line of EmployeeIndex: " << getIndexLineNumber(key) << endl;
-
-    // lookup records with key
-    vector<struct record> records = readRecordsAtIndex(key);
-
-    for (int i = 0; i < records.size(); i++) {
-        if (records[i].id == id) {
-            cout << "Record Found ->" << endl;
-            cout << "\tID: " << records[i].id << endl;
-            cout << "\tName: " << records[i].name << endl;
-            cout << "\tBio: " << records[i].bio << endl;
-            cout << "\tManager ID: " << records[i].manager_id << endl;
-            foundID = true;
+    while (curRecNum < empLines) {
+        // load run into buffer
+        for (int i=0; i<m+1 && curRecNum < empLines; i++) { // m+1 because no double buffering is necessary
+            // Retrieve and place record in buffer block
+            run.push_back(getEmpRecord(curRecNum));
+            curRecNum++;
         }
-    }
 
-    if (foundID == false) {
-        cout << "Could not find record." << endl;
+        // sort run
+        sort(run.begin(), run.end(), compareEid);
+
+        // write run to file
+        for (int i=0; i<run.size(); i++) {
+            outRec = run[i];
+            cout << to_string(outRec.eid) + ", " + outRec.ename + "\n";
+        }
+
+        run.clear();
     }
 
 }
 
-int getRecordSize(struct record r) {
-    return r.id.length() + r.name.length() + r.bio.length() + r.manager_id.length();
+void runSortDeptRecords(int m) {
+
 }
 
-struct record* add_record(string id, string name, string bio, string manager_id) {
+void merge(int m) {
 
-    // Check to see if attributes are correct byte lengths
-    if (id.length() != 8) {
-        cerr << "ERROR: id value [" << id << "] not 8 bytes" << endl;
-    }
-    else if (name.length() < 1 || name.length() > 200) {
-        cerr << "ERROR: name value [" << name << "] not within range of 1-200 bytes" << endl;
-    }
-    else if (bio.length() < 1 || bio.length() > 500) {
-        cerr << "ERROR: bio value [" << bio << "] not within range of 1-200 bytes" << endl;
-    }
-    if (manager_id.length() != 8) {
-        cerr << "ERROR: manager_id value [" << manager_id << "] not 8 bytes" << endl;
-    }
-
-    // Create new record
-    struct record* returnRecord= new struct record;
-
-    returnRecord->id = id;
-    returnRecord->name = name;
-    returnRecord->bio = bio;
-    returnRecord->manager_id = manager_id;
-
-    return returnRecord; 
 }
 
+struct empRecord createEmpRecord(string eid, string ename, string age, string salary) {
+    struct empRecord returnRecord;
+    returnRecord.eid = stoi(eid);
+    returnRecord.ename = ename;
+    returnRecord.age = stoi(age);
+    returnRecord.salary = stof(salary);
+    return returnRecord;
+}
+
+/*
 void processRecords(string csvName){
     vector<string> csvAttributes;
     string attribute; // For tokenizing csv lines
@@ -176,7 +161,47 @@ void processRecords(string csvName){
         csvAttributes.clear();
     }
 }
+*/
 
+// Indexed at 0
+struct empRecord getEmpRecord(int index) {
+    vector<string> csvAttributes;
+    string attribute; // For tokenizing csv lines
+    string line = getLineOfFile("Emp.csv", index + 1); // File lines start at 1
+    stringstream linestream(line);
+    while (getline(linestream, attribute, ','))
+    {
+        csvAttributes.push_back(attribute);
+    }
+    
+    // Create and return records from values extracted from the line
+    return createEmpRecord(csvAttributes[0], csvAttributes[1], csvAttributes[2], csvAttributes[3]);
+}
+
+
+
+/*
+void runSortEmpRecords(int m) {
+    vector<string> csvAttributes;
+    string attribute; // For tokenizing csv lines
+    ifstream infile(csvName);
+    
+
+    for(string line; getline(infile, line);)
+    {
+        stringstream linestream(line);
+        while (getline(linestream, attribute, ','))
+        {
+            csvAttributes.push_back(attribute);
+        }
+        
+        // Add record to index
+        insertRecord(*add_record(csvAttributes[0], csvAttributes[1], csvAttributes[2], csvAttributes[3]));
+        csvAttributes.clear();
+    }
+}
+*/
+/*
 vector<struct record> readRecordsAtIndex(string index){
     vector<struct record> records;
     vector<string> attributes;
@@ -201,7 +226,9 @@ vector<struct record> readRecordsAtIndex(string index){
     }
     return records;
 }
+*/
 
+/*
 void writeRecordsAtIndex(string index, vector<struct record> records) {
     vector<string> attributes;
     string record; // For tokenizing the line
@@ -222,291 +249,62 @@ void writeRecordsAtIndex(string index, vector<struct record> records) {
 
     changeLineOfIndex(linenumber, writeline);
 }
+*/
 
-int binaryStrToDecimal(string str) {
-    int num = 0;
-    for (int i=0; i < str.length(); i++) {
-        if (str[i] == '1') {
-            num += pow(2, str.length() - i - 1);
-        }
-    }
-    return num;
-}
-
-// Code refrenced from stack overflow user user3478487
-// Reference link: https://stackoverflow.com/questions/22746429/c-decimal-to-binary-converting/22746526
-string toBinary(int n)
-{
-    std::string r;
-    while(n!=0) {r=(n%2==0 ?"0":"1")+r; n/=2;}
-    return r;
-}
-
-
-string idToBitString(string id) {
-    string bitstring = "";
-    for (char& letter : id) {
-        bitstring += bitset<8>(letter).to_string();
-    }
-    return bitstring;
-}
-
-string getLastIBits(string key, int i) {
-    return key.substr(key.length()-i);
-}
-
-string flipBit(string key) {
-    if (key[0] == '0') {
-            key[0] = '1';
-    }
-    else if (key[0] == '1') {
-        key[0] = '0';
-    }
-    return key;
-}
-
-string idToIndexKey(string id) {
-    string key = idToBitString(id);
-    key = getLastIBits(key, bitRep);
-
-    // Flip bits if decimal rep is bigger than bucket amount
-    if (binaryStrToDecimal(key) >= buckets) {
-        key = flipBit(key);
-    }
-
-    return key;
-}
-
-
-void insertRecord(struct record rec) {
-    string key = idToIndexKey(rec.id);
-
-    // Find bucket based on key
-    vector<struct record> bucketRecords = readRecordsAtIndex(key);
-    bucketRecords.push_back(rec);
-    // Add to space count
-    totalSpaceUsed += getRecordSize(rec);
-
-    writeRecordsAtIndex(key, bucketRecords);
-
-    
-    // Trigger extension if overload occurs
-    if (totalSpaceUsed / 4096 > 0.8) { // if space goes over load factor
-        // Extend if necessary
-        if (buckets + 1 > pow(2, bitRep)) {
-           bitRep++;
-           reorderTable(); // Increase indexes and reorder
-        }
-        buckets++;
-
-        string newBucketKey = toBinary(buckets - 1);
-        addLineToIndex(newBucketKey + "|");
-
-        // put unfliped values in proper bucket
-        handleFlippedKeyValues(newBucketKey);
-        
-    }
-}
-
-void handleFlippedKeyValues(string key) {
-    vector<struct record> recordsAtOldBucket;
-    string intendedKey;
-    struct record moveRecord;
-    vector<struct record> recordsAtBucketToMoveTo;
-    vector<int> recordsToErase;
-
-    string flipKey = flipBit(key);
-
-    recordsAtOldBucket = readRecordsAtIndex(flipKey);
-
-    for (int j = 0; j < recordsAtOldBucket.size(); j++) {
-        intendedKey = idToIndexKey(recordsAtOldBucket[j].id);
-        
-        if (intendedKey != flipKey) {
-            moveRecord = recordsAtOldBucket[j];
-            recordsToErase.push_back(j);
-            recordsAtBucketToMoveTo = readRecordsAtIndex(intendedKey);
-            recordsAtBucketToMoveTo.push_back(moveRecord);
-            writeRecordsAtIndex(intendedKey, recordsAtBucketToMoveTo);
-        }
-    }
-
-    // Erase moved buckets at original values to prevent duplicates
-    for (int j = 0; j < recordsToErase.size(); j++) {
-        recordsAtOldBucket.erase(recordsAtOldBucket.begin()+recordsToErase[j]);
-        writeRecordsAtIndex(flipKey, recordsAtOldBucket);
-    }
-    
-    recordsToErase.clear();
-}
-
-void reorderTable() {
-    int count = 0;
-    string bucketKey;
-    string line;
-    vector<struct record> recordsAtBucket;
-    string intendedKey;
-    struct record moveRecord;
-    vector<struct record> recordsAtBucketToMoveTo;
-    vector<int> recordsToErase;
-    
-    // Change keys
-    for (int i = 0; i < buckets; i++) {
-        bucketKey = toBinary(i);
-        int zeros = bitRep - bucketKey.length();
-        for (int j = 0; j < zeros; j++) {
-            bucketKey = "0" + bucketKey;
-        }
-        line = getLineOfIndex(i + 1);
-        line = bucketKey + line.substr(bitRep - 1, line.length());
-        changeLineOfIndex(i + 1, line);
-    }
-
-    // Reorder records to new keys
-    for (int i = 0; i < buckets; i++) {
-        bucketKey = toBinary(i);
-        int zeros = bitRep - bucketKey.length();
-        for (int j = 0; j < zeros; j++) {
-            bucketKey = "0" + bucketKey;
-        }
-        recordsAtBucket = readRecordsAtIndex(bucketKey);
-
-        for (int j = 0; j < recordsAtBucket.size(); j++) {
-            intendedKey = idToIndexKey(recordsAtBucket[j].id);
-            
-            if (intendedKey != bucketKey) {
-                moveRecord = recordsAtBucket[j];
-                recordsToErase.push_back(j);
-                recordsAtBucketToMoveTo = readRecordsAtIndex(intendedKey);
-                recordsAtBucketToMoveTo.push_back(moveRecord);
-                writeRecordsAtIndex(intendedKey, recordsAtBucketToMoveTo);
-            }
-        }
-
-        // Erase moved buckets at original values to prevent duplicates
-        for (int j = 0; j < recordsToErase.size(); j++) {
-            recordsAtBucket.erase(recordsAtBucket.begin()+recordsToErase[j]);
-            writeRecordsAtIndex(bucketKey, recordsAtBucket);
-        }
-        
-        recordsToErase.clear();
-    }
-}
-
-int countLinesOfIndex() {
+int countLinesOfFile(string filename ) {
     string line;
     int count = 0;
-    ifstream indexfile {"EmployeeIndex"};
+    ifstream file {filename};
 
-    while (getline(indexfile, line)) {
+    while (getline(file, line)) {
         count++;
     }
-    indexfile.close();
+
+    file.close();
     return count;
 }
 
-string getLineOfIndex(int lineNumber) {
+string getLineOfFile(string fileName, int lineNumber) {
     string line;
-    ifstream indexfile {"EmployeeIndex"};
+    ifstream file {fileName};
 
     for (int i=0; i < lineNumber-1; i++) {
-        if (!getline(indexfile, line)) {
+        if (!getline(file, line)) {
             cerr << "ERROR: File does not extend to line " << lineNumber << endl;
         }
     }
-    getline(indexfile, line);
-    indexfile.close();
+
+    getline(file, line);
+    file.close();
     return line;
 }
 
-void changeLineOfIndex(int lineNumber, string newLine) {
+void addLineToEOF(string filename, string newLine) {
     string line;
-    ifstream indexfile {"EmployeeIndex"};
-    ofstream newIndexFile {"NewEmployeeIndex"};
-    for (int i=0; i < lineNumber-1; i++) {
-        if (!getline(indexfile, line)) {
-            cerr << "ERROR: File does not extend to line " << lineNumber << endl;
-        }
-        newIndexFile << line + "\n";
-    }
-
+    //ifstream indexfile {"EmployeeIndex"};
+    //ofstream newIndexFile {"NewEmployeeIndex"};
     
-    // insert new line
-    newIndexFile << newLine + "\n";
+    string newFilename = "new" + filename;
 
-    // discard old line
-    getline(indexfile, line);
-
-    // write remaining lines of old file
-    while (getline(indexfile, line)) {
-        newIndexFile << line + "\n";
-    }
-
-    indexfile.close();
-    newIndexFile.close();
-    // Delete old index
-    if (remove("EmployeeIndex")!=0) {
-        cerr << "ERROR: Could not delete old index file" << endl;
-    }
-    // Rename new index
-    rename("NewEmployeeIndex", "EmployeeIndex");
-}
-
-void addLineToIndex(string newLine) {
-    string line;
-    ifstream indexfile {"EmployeeIndex"};
-    ofstream newIndexFile {"NewEmployeeIndex"};
+    ifstream oldFile {filename};
+    ofstream newFile {newFilename};
 
     // write lines of old file
-    while (getline(indexfile, line)) {
-        newIndexFile << line + "\n";
+    while (getline(oldFile, line)) {
+        newFile<< line + "\n";
     }
 
     // insert new line
-    newIndexFile << newLine + "\n";
+    newFile<< newLine + "\n";
 
-    indexfile.close();
-    newIndexFile.close();
+    oldFile.close();
+    newFile.close();
 
     // Delete old index
-    if (remove("EmployeeIndex")!=0) {
+    if (remove(filename.c_str())!=0) {
         cerr << "ERROR: Could not delete old index file" << endl;
     }
     // Rename new index
-    rename("NewEmployeeIndex", "EmployeeIndex");
+    rename(newFilename.c_str(), filename.c_str()); 
 
-    
 }
-
-int getIndexLineNumber(string index) {
-    string line;
-    ifstream indexfile {"EmployeeIndex"};
-    int lineNumber = 0;
-
-    while (getline(indexfile, line)) {
-        lineNumber++;
-        if (index == line.substr(0, bitRep)) {
-            indexfile.close();
-            return lineNumber;
-        }
-    }
-    indexfile.close();
-    cerr << "ERROR: Could not find line number for index" << endl;
-    return -5;
-}
-
-void initIndex() {
-    
-    if (remove("EmployeeIndex")!=0) {
-        //cerr << "ERROR: Could not delete old index file" << endl;
-    }
-    
-    ofstream indexfile {"EmployeeIndex"};
-
-    indexfile << "0|\n";
-    indexfile << "1|\n";
-
-    indexfile.close();
-}
-
-
