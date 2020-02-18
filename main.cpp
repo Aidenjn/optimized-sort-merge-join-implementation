@@ -96,15 +96,16 @@ bool compareEid(const empRecord &a, const empRecord &b) {
 
 void runSortEmpRecords(int m) {
     //struct empRecord curRec = getNextEmpRecord();
+    string filename = "Emp.csv";
     struct empRecord outRec;
     int curRecNum = 0;
     vector<struct empRecord> run = vector<struct empRecord>();
 
-    int empLines = countLinesOfFile("Emp.csv");
+    int empLines = countLinesOfFile(filename);
 
     while (curRecNum < empLines) {
         // load run into buffer
-        for (int i=0; i<m+1 && curRecNum < empLines; i++) { // m+1 because no double buffering is necessary
+        for (int i=0; i<m && curRecNum < empLines; i++) { 
             // Retrieve and place record in buffer block
             run.push_back(getEmpRecord(curRecNum));
             curRecNum++;
@@ -117,6 +118,7 @@ void runSortEmpRecords(int m) {
         for (int i=0; i<run.size(); i++) {
             outRec = run[i];
             cout << to_string(outRec.eid) + ", " + outRec.ename + "\n";
+            addLineToEOF(filename, to_string(outRec.eid) + "," + outRec.ename + "," + to_string(outRec.age) + "," + to_string(outRec.salary));
         }
 
         run.clear();
