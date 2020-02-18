@@ -96,12 +96,14 @@ bool compareEid(const empRecord &a, const empRecord &b) {
 
 void runSortEmpRecords(int m) {
     //struct empRecord curRec = getNextEmpRecord();
-    string filename = "Emp.csv";
+    string oldFilename = "Emp.csv";
+    string newFilename = "sortingEmp.csv";
+    ofstream output(newFilename);
     struct empRecord outRec;
     int curRecNum = 0;
     vector<struct empRecord> run = vector<struct empRecord>();
 
-    int empLines = countLinesOfFile(filename);
+    int empLines = countLinesOfFile(oldFilename);
 
     while (curRecNum < empLines) {
         // load run into buffer
@@ -118,12 +120,12 @@ void runSortEmpRecords(int m) {
         for (int i=0; i<run.size(); i++) {
             outRec = run[i];
             cout << to_string(outRec.eid) + ", " + outRec.ename + "\n";
-            addLineToEOF(filename, to_string(outRec.eid) + "," + outRec.ename + "," + to_string(outRec.age) + "," + to_string(outRec.salary));
+            addLineToEOF(newFilename, to_string(outRec.eid) + "," + outRec.ename + "," + to_string(outRec.age) + "," + to_string(outRec.salary));
         }
-
         run.clear();
     }
-
+    // Unsorted file is replaced with the newly sorted file
+    rename(newFilename.c_str(), oldFilename.c_str()); 
 }
 
 void runSortDeptRecords(int m) {
