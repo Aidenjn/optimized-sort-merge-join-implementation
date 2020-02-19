@@ -122,7 +122,6 @@ bool compareBuffEid(const empBufferBlock &a, const empBufferBlock &b) {
 }
 
 void runSortEmpRecords(int m) {
-    //struct empRecord curRec = getNextEmpRecord();
     string oldFilename = "Emp.csv";
     string newFilename = "sortingEmp.csv";
     ofstream output(newFilename);
@@ -146,7 +145,7 @@ void runSortEmpRecords(int m) {
         // write run to file
         for (int i=0; i<run.size(); i++) {
             outRec = run[i];
-            cout << to_string(outRec.eid) + ", " + outRec.ename + "\n";
+            //cout << to_string(outRec.eid) + ", " + outRec.ename + "\n";
             addLineToEOF(newFilename, to_string(outRec.eid) + "," + outRec.ename + "," + to_string(outRec.age) + "," + to_string(outRec.salary));
         }
         run.clear();
@@ -156,7 +155,36 @@ void runSortEmpRecords(int m) {
 }
 
 void runSortDeptRecords(int m) {
+    string oldFilename = "Dept.csv";
+    string newFilename = "sortingDept.csv";
+    ofstream output(newFilename);
+    struct deptRecord outRec;
+    int curRecNum = 0;
+    vector<struct deptRecord> run = vector<struct deptRecord>();
 
+    int deptLines = countLinesOfFile(oldFilename);
+
+    while (curRecNum < deptLines) {
+        // load run into buffer
+        for (int i=0; i<m && curRecNum < deptLines; i++) { 
+            // Retrieve and place record in buffer block
+            run.push_back(getDeptRecord(curRecNum));
+            curRecNum++;
+        }
+
+        // sort run
+        sort(run.begin(), run.end(), compareManagerid);
+
+        // write run to file
+        for (int i=0; i<run.size(); i++) {
+            outRec = run[i];
+            //cout << to_string(outRec.managerid) + ", " + outRec.dname + "\n";
+            addLineToEOF(newFilename, to_string(outRec.did) + "," + outRec.dname + "," + to_string(outRec.budget) + "," + to_string(outRec.managerid));
+        }
+        run.clear();
+    }
+    // Unsorted file is replaced with the newly sorted file
+    rename(newFilename.c_str(), oldFilename.c_str()); 
 }
 
 void merge(int m) {
@@ -168,11 +196,15 @@ void merge(int m) {
 
     struct empRecord* empOutRec;
     struct deptRecord* deptOutRec;
+    //struct empRecord* empOutRec = new struct empRecord;
+    //struct deptRecord* deptOutRec = new struct deptRecord;
     int curEmpRecNum = 0;
     int curDeptRecNum = 0;
 
-    struct empBufferBlock empConstructor;
     struct deptBufferBlock deptConstructor;
+    struct empBufferBlock empConstructor;
+    empConstructor.blockRecord = new struct empRecord;
+    deptConstructor.blockRecord = new struct deptRecord;
     vector<struct empBufferBlock> empBuffs = vector<struct empBufferBlock>();
     vector<struct deptBufferBlock> deptBuffs = vector<struct deptBufferBlock>();
 
@@ -181,6 +213,7 @@ void merge(int m) {
 
     // Retrieve first tuples for each run
     
+    cout << "Collecting dept records\n";
     // Dept records
     while (curDeptRecNum < deptLines) {
         // Get first block
@@ -198,6 +231,7 @@ void merge(int m) {
         // add m
         curDeptRecNum += m;
     }
+    cout << "Dept records collected\n";
 
     // Emp records
     while (curEmpRecNum < empLines) {
@@ -216,6 +250,7 @@ void merge(int m) {
         // add m
         curEmpRecNum += m;
     }
+    cout << "Emp records collected\n";
 
     // Sort Merge Join
     while (empBuffs.size() > 0 && deptBuffs.size() > 0) {
