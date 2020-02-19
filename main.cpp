@@ -188,11 +188,7 @@ void runSortDeptRecords(int m) {
 }
 
 void merge(int m) {
-    //struct empRecord curRec = getNextEmpRecord();
-    string oldFilename = "Emp.csv";
-    string newFilename = "sortingEmp.csv";
     ofstream output("creatingJoin.csv");
-
 
     struct empRecord* empOutRec;
     struct deptRecord* deptOutRec;
@@ -213,7 +209,6 @@ void merge(int m) {
 
     // Retrieve first tuples for each run
     
-    cout << "Collecting dept records\n";
     // Dept records
     while (curDeptRecNum < deptLines) {
         // Get first block
@@ -313,9 +308,8 @@ void merge(int m) {
                 }
             }
         }
-
-        rename("creatingJoin.csv", "join.csv"); 
     }
+    rename("creatingJoin.csv", "join.csv"); 
 }
 
 struct empRecord createEmpRecord(string eid, string ename, string age, string salary) {
@@ -443,9 +437,9 @@ void addLineToEOF(string filename, string newLine) {
     oldFile.close();
     newFile.close();
 
-    // Delete old index
+    // Delete old file
     if (remove(filename.c_str())!=0) {
-        cerr << "ERROR: Could not delete old index file" << endl;
+        cerr << "ERROR: Could not delete old file: " + filename << endl;
     }
     // Rename new index
     rename(newFilename.c_str(), filename.c_str()); 
