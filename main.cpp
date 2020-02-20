@@ -18,7 +18,7 @@ using namespace std;
 struct deptRecord {
   int did; // 4 bytes
   string dname; // 40 bytes 
-  double budget; // 8 bytes
+  string budget; // 8 bytes
   int managerid; // 4 bytes
 };
 
@@ -27,7 +27,7 @@ struct empRecord {
   int eid; // 4 bytes
   string ename; // 40 bytes 
   int age; // 4 bytes
-  double salary; // 8 bytes
+  string salary; // 8 bytes
 };
 
 // Dept Buffer Block for merge operation
@@ -127,8 +127,7 @@ void runSortEmpRecords(int m) {
         // write run to file
         for (int i=0; i<run.size(); i++) {
             outRec = run[i];
-            //cout << to_string(outRec.eid) + ", " + outRec.ename + "\n";
-            addLineToEOF(newFilename, to_string(outRec.eid) + "," + outRec.ename + "," + to_string(outRec.age) + "," + to_string(outRec.salary));
+            addLineToEOF(newFilename, to_string(outRec.eid) + "," + outRec.ename + "," + to_string(outRec.age) + "," + outRec.salary);
         }
         run.clear();
     }
@@ -161,7 +160,7 @@ void runSortDeptRecords(int m) {
         for (int i=0; i<run.size(); i++) {
             outRec = run[i];
             //cout << to_string(outRec.managerid) + ", " + outRec.dname + "\n";
-            addLineToEOF(newFilename, to_string(outRec.did) + "," + outRec.dname + "," + to_string(outRec.budget) + "," + to_string(outRec.managerid));
+            addLineToEOF(newFilename, to_string(outRec.did) + "," + outRec.dname + "," + outRec.budget + "," + to_string(outRec.managerid));
         }
         run.clear();
     }
@@ -244,10 +243,12 @@ void merge(int m) {
         sort(empBuffs.begin(), empBuffs.end(), compareBuffEid);
         sort(deptBuffs.begin(), deptBuffs.end(), compareBuffManagerid);
 
+        /*
         cout << "comparing...\n";
         cout << "Dept mid: " << deptBuffs[0].blockRecord->managerid << "\n";
         cout << "Emp eid: " << empBuffs[0].blockRecord->eid << "\n";
         cout << "\n";
+        */
         if (deptBuffs[0].blockRecord->managerid > empBuffs[0].blockRecord->eid) {
             // next tuple in emp
             if (empBuffs[0].elementCount != 1) {
@@ -283,18 +284,20 @@ void merge(int m) {
 
             // Output all matching tuples
             while (deptBuffs[0].blockRecord->managerid == empBuffs[0].blockRecord->eid) {
+                /*
                 cout << "Nested loop entered! comparing...\n";
                 cout << "Dept mid: " << deptBuffs[0].blockRecord->managerid << "\n";
                 cout << "Emp eid: " << empBuffs[0].blockRecord->eid << "\n";
                 cout << "\n";
+                */
                 // Load tuples into output blocks
                 deptOutRec = deptBuffs[0].blockRecord;
                 empOutRec = empBuffs[0].blockRecord;
 
                 // Output output
                 addLineToEOF("creatingJoin.csv", 
-                        to_string(deptOutRec->did) + "," + deptOutRec->dname + "," + to_string(deptOutRec->budget) + "," + to_string(deptOutRec->managerid) + "," +
-                        to_string(empOutRec->eid) + "," + empOutRec->ename + "," + to_string(empOutRec->age) + "," + to_string(empOutRec->salary)
+                        to_string(deptOutRec->did) + "," + deptOutRec->dname + "," + deptOutRec->budget + "," + to_string(deptOutRec->managerid) + "," +
+                        to_string(empOutRec->eid) + "," + empOutRec->ename + "," + to_string(empOutRec->age) + "," + empOutRec->salary
                         );
 
                 // Next tuple in Emp
@@ -340,7 +343,8 @@ struct empRecord* createEmpRecord(string eid, string ename, string age, string s
     returnRecord->eid = stoi(eid);
     returnRecord->ename = ename;
     returnRecord->age = stoi(age);
-    returnRecord->salary = stof(salary);
+    //returnRecord->salary = stof(salary);
+    returnRecord->salary = salary;
     return returnRecord;
 }
 
@@ -363,7 +367,8 @@ struct deptRecord* createDeptRecord(string did, string dname, string budget, str
     struct deptRecord* returnRecord = new deptRecord;
     returnRecord->did = stoi(did);
     returnRecord->dname = dname;
-    returnRecord->budget = stof(budget);
+    //returnRecord->budget = stof(budget);
+    returnRecord->budget = budget;
     returnRecord->managerid = stoi(managerid);
     return returnRecord;
 }
