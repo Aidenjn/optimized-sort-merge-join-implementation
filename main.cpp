@@ -42,6 +42,10 @@ struct empBufferBlock {
     int elementCount;
     int currentElementLineNumber;
     struct empRecord* blockRecord;
+
+    // To return to starting point after nested loop through emp
+    int nestElementCount;
+    int nestCurrentElementLineNumber;
 };
 
 
@@ -52,8 +56,8 @@ void runSortEmpRecords(int m); // Sorts files into runs of m length
 void runSortDeptRecords(int m); // Sorts files into runs of m length  
 void merge(int m); // Merges files that are sorted into runs of m length
 
-struct empRecord getEmpRecord(int index);
-struct deptRecord getDeptRecord(int index);
+struct empRecord* getEmpRecord(int index);
+struct deptRecord* getDeptRecord(int index);
 
 int countLinesOfFile(string filename);
 string getLineOfFile(string fileName, int lineNumber);
@@ -63,33 +67,8 @@ void addLineToEOF(string filename, string newLine);
 int empRecordCount;
 int deptRecordCount;
 
-
-// Old prototypes !!! DELETE !!!
-
-void createIndex();
-void lookupId(string id);
-struct record* add_record(string id, string name, string bio, string manager_id); 
-int binaryStrToDecimal(string str);
-string idToBitString(string id);
-string getLastIBits(string key, int i);
-string flipBit(string key);
-string toBinary(int n);
-void reorderTable();
-void insertRecord(struct record rec);
-string getLineOfIndex(int lineNumber);
-int countLinesOfIndex();
-void changeLineOfIndex(int lineNumber, string newLine);
-void addLineToIndex(string newLine);
-int getIndexLineNumber(string index);
-vector<struct record> readRecordsAtIndex(string index);
-void writeRecordsAtIndex(string index, vector<struct record> records);
-string idToIndexKey(string id);
-void initIndex();
-void handleFlippedKeyValues(string key);
-
 int main(int argc, char* argv[])
 {
-
     // Calculate M
     int m = BUFFER_SIZE - 2; // -2 because reserving space for output and double buffer
 
@@ -118,6 +97,9 @@ bool compareBuffManagerid(const deptBufferBlock &a, const deptBufferBlock &b) {
 }
 
 bool compareBuffEid(const empBufferBlock &a, const empBufferBlock &b) {
+    //bool result = a.blockRecord->eid < b.blockRecord->eid; 
+    //cout << a.blockRecord->ename << " vs " << b.blockRecord->ename << "\n";
+    //cout << a.blockRecord->eid << " < " << b.blockRecord->eid << " : " << result << "\n";
     return a.blockRecord->eid < b.blockRecord->eid;
 }
 
@@ -135,7 +117,7 @@ void runSortEmpRecords(int m) {
         // load run into buffer
         for (int i=0; i<m && curRecNum < empLines; i++) { 
             // Retrieve and place record in buffer block
-            run.push_back(getEmpRecord(curRecNum));
+            run.push_back(*getEmpRecord(curRecNum));
             curRecNum++;
         }
 
@@ -168,7 +150,7 @@ void runSortDeptRecords(int m) {
         // load run into buffer
         for (int i=0; i<m && curRecNum < deptLines; i++) { 
             // Retrieve and place record in buffer block
-            run.push_back(getDeptRecord(curRecNum));
+            run.push_back(*getDeptRecord(curRecNum));
             curRecNum++;
         }
 
@@ -192,17 +174,21 @@ void merge(int m) {
 
     struct empRecord* empOutRec;
     struct deptRecord* deptOutRec;
-    //struct empRecord* empOutRec = new struct empRecord;
-    //struct deptRecord* deptOutRec = new struct deptRecord;
+
     int curEmpRecNum = 0;
     int curDeptRecNum = 0;
 
-    struct deptBufferBlock deptConstructor;
-    struct empBufferBlock empConstructor;
-    empConstructor.blockRecord = new struct empRecord;
-    deptConstructor.blockRecord = new struct deptRecord;
+    // variables for nested looping through Emp
+    int nestedLoopEmpRecNum;
+    //int nestedLoopEmpRecNum;
+
+    struct deptBufferBlock* deptConstructor;
+    struct empBufferBlock* empConstructor;
+
     vector<struct empBufferBlock> empBuffs = vector<struct empBufferBlock>();
     vector<struct deptBufferBlock> deptBuffs = vector<struct deptBufferBlock>();
+
+    vector<struct empBufferBlock> nestStack = vector<struct empBufferBlock>();
 
     int empLines = countLinesOfFile("Emp.csv");
     int deptLines = countLinesOfFile("Dept.csv");
@@ -212,52 +198,64 @@ void merge(int m) {
     // Dept records
     while (curDeptRecNum < deptLines) {
         // Get first block
-        *(deptConstructor.blockRecord) = getDeptRecord(curDeptRecNum);
-        deptConstructor.currentElementLineNumber = curDeptRecNum;
+        deptConstructor = new deptBufferBlock;
+        deptConstructor->blockRecord = new struct deptRecord;
+        deptConstructor->blockRecord = getDeptRecord(curDeptRecNum);
+        deptConstructor->currentElementLineNumber = curDeptRecNum;
         if (curDeptRecNum + m > deptLines) {
-            deptConstructor.elementCount = deptLines - curDeptRecNum; // TODO:Does this need to be -1 ?
+            deptConstructor->elementCount = deptLines - curDeptRecNum; // TODO:Does this need to be -1 ?
         }
         else {
-            deptConstructor.elementCount = m;
+            deptConstructor->elementCount = m;
         }
         // add record to block
-        deptBuffs.push_back(deptConstructor);
+        deptBuffs.push_back(*deptConstructor);
 
         // add m
         curDeptRecNum += m;
     }
-    cout << "Dept records collected\n";
+    cout << deptBuffs.size() << " Dept runs generated\n";
 
     // Emp records
     while (curEmpRecNum < empLines) {
         // Get first block
-        *(empConstructor.blockRecord) = getEmpRecord(curEmpRecNum);
-        empConstructor.currentElementLineNumber = curEmpRecNum;
+        empConstructor = new empBufferBlock;
+        empConstructor->blockRecord = new struct empRecord;
+        empConstructor->blockRecord = getEmpRecord(curEmpRecNum);
+        empConstructor->currentElementLineNumber = curEmpRecNum;
         if (curEmpRecNum + m > empLines) {
-            empConstructor.elementCount = empLines - curEmpRecNum; // TODO:Does this need to be -1 ?
+            empConstructor->elementCount = empLines - curEmpRecNum; // TODO:Does this need to be -1 ?
         }
         else {
-            empConstructor.elementCount = m;
+            empConstructor->elementCount = m;
         }
         // add record to block
-        empBuffs.push_back(empConstructor);
+        empBuffs.push_back(*empConstructor);
 
         // add m
         curEmpRecNum += m;
     }
-    cout << "Emp records collected\n";
+    cout << empBuffs.size() << " Emp runs generated\n";
+    //cout << "Begin: " << empBuffs[0].blockRecord->ename << endl;
+    //cout << "End: " << empBuffs[1].blockRecord->ename << endl;
 
     // Sort Merge Join
     while (empBuffs.size() > 0 && deptBuffs.size() > 0) {
         sort(empBuffs.begin(), empBuffs.end(), compareBuffEid);
         sort(deptBuffs.begin(), deptBuffs.end(), compareBuffManagerid);
 
+        cout << "comparing...\n";
+        cout << "Dept mid: " << deptBuffs[0].blockRecord->managerid << "\n";
+        cout << "Emp eid: " << empBuffs[0].blockRecord->eid << "\n";
+        cout << "\n";
         if (deptBuffs[0].blockRecord->managerid > empBuffs[0].blockRecord->eid) {
             // next tuple in emp
             if (empBuffs[0].elementCount != 1) {
+                //cout << "emp line number: " << empBuffs[0].currentElementLineNumber << "\n"; 
+                //cout << "emp line number: " << empBuffs[1].currentElementLineNumber << "\n"; 
                 empBuffs[0].currentElementLineNumber += 1;
                 empBuffs[0].elementCount -= 1;
-                *empBuffs[0].blockRecord = getEmpRecord(empBuffs[0].currentElementLineNumber); 
+                empBuffs[0].blockRecord = getEmpRecord(empBuffs[0].currentElementLineNumber); 
             }
             else {
                 empBuffs.erase(empBuffs.begin());
@@ -268,15 +266,27 @@ void merge(int m) {
             if (deptBuffs[0].elementCount != 1) {
                 deptBuffs[0].currentElementLineNumber += 1;
                 deptBuffs[0].elementCount -= 1;
-                *deptBuffs[0].blockRecord = getDeptRecord(deptBuffs[0].currentElementLineNumber); 
+                deptBuffs[0].blockRecord = getDeptRecord(deptBuffs[0].currentElementLineNumber); 
             }
             else {
                 deptBuffs.erase(deptBuffs.begin());
             }
         }
         else {
+            // Nested loop thru emp
+
+            // Make copies of all the stats 
+            for (int i=0; i<empBuffs.size(); i++) {
+                empBuffs[i].nestCurrentElementLineNumber = empBuffs[i].currentElementLineNumber;
+                empBuffs[i].nestElementCount = empBuffs[i].elementCount;
+            }
+
             // Output all matching tuples
             while (deptBuffs[0].blockRecord->managerid == empBuffs[0].blockRecord->eid) {
+                cout << "Nested loop entered! comparing...\n";
+                cout << "Dept mid: " << deptBuffs[0].blockRecord->managerid << "\n";
+                cout << "Emp eid: " << empBuffs[0].blockRecord->eid << "\n";
+                cout << "\n";
                 // Load tuples into output blocks
                 deptOutRec = deptBuffs[0].blockRecord;
                 empOutRec = empBuffs[0].blockRecord;
@@ -287,42 +297,55 @@ void merge(int m) {
                         to_string(empOutRec->eid) + "," + empOutRec->ename + "," + to_string(empOutRec->age) + "," + to_string(empOutRec->salary)
                         );
 
-                // Next tuple in Dept
-                if (deptBuffs[0].elementCount != 1) {
-                    deptBuffs[0].currentElementLineNumber += 1;
-                    deptBuffs[0].elementCount -= 1;
-                    *deptBuffs[0].blockRecord = getDeptRecord(deptBuffs[0].currentElementLineNumber); 
-                }
-                else {
-                    deptBuffs.erase(deptBuffs.begin());
-                }
-
                 // Next tuple in Emp
-                if (empBuffs[0].elementCount != 1) {
-                    empBuffs[0].currentElementLineNumber += 1;
-                    empBuffs[0].elementCount -= 1;
-                    *empBuffs[0].blockRecord = getEmpRecord(empBuffs[0].currentElementLineNumber); 
+                if (empBuffs[0].nestElementCount != 1) {
+                    empBuffs[0].nestCurrentElementLineNumber += 1;
+                    empBuffs[0].nestElementCount -= 1;
+                    empBuffs[0].blockRecord = getEmpRecord(empBuffs[0].nestCurrentElementLineNumber); 
                 }
                 else {
+                    //break;
+                    nestStack.push_back(empBuffs[0]);
                     empBuffs.erase(empBuffs.begin());
                 }
+                sort(empBuffs.begin(), empBuffs.end(), compareBuffEid);
             }
+
+            // Next tuple in Dept
+            if (deptBuffs[0].elementCount != 1) {
+                deptBuffs[0].currentElementLineNumber += 1;
+                deptBuffs[0].elementCount -= 1;
+                deptBuffs[0].blockRecord = getDeptRecord(deptBuffs[0].currentElementLineNumber); 
+            }
+            else {
+                deptBuffs.erase(deptBuffs.begin());
+            }
+
+            // Reset Emp record
+            for (int i=0; i<nestStack.size(); i++) {
+                empBuffs.push_back(nestStack[i]);
+            }
+            nestStack.clear();
+            for (int i=0; i<empBuffs.size(); i++) {
+                empBuffs[i].blockRecord = getEmpRecord(empBuffs[i].currentElementLineNumber);
+            }
+
         }
     }
     rename("creatingJoin.csv", "join.csv"); 
 }
 
-struct empRecord createEmpRecord(string eid, string ename, string age, string salary) {
-    struct empRecord returnRecord;
-    returnRecord.eid = stoi(eid);
-    returnRecord.ename = ename;
-    returnRecord.age = stoi(age);
-    returnRecord.salary = stof(salary);
+struct empRecord* createEmpRecord(string eid, string ename, string age, string salary) {
+    struct empRecord* returnRecord = new empRecord;
+    returnRecord->eid = stoi(eid);
+    returnRecord->ename = ename;
+    returnRecord->age = stoi(age);
+    returnRecord->salary = stof(salary);
     return returnRecord;
 }
 
 // Indexed at 0
-struct empRecord getEmpRecord(int index) {
+struct empRecord* getEmpRecord(int index) {
     vector<string> csvAttributes;
     string attribute; // For tokenizing csv lines
     string line = getLineOfFile("Emp.csv", index + 1); // File lines start at 1
@@ -336,17 +359,17 @@ struct empRecord getEmpRecord(int index) {
     return createEmpRecord(csvAttributes[0], csvAttributes[1], csvAttributes[2], csvAttributes[3]);
 }
 
-struct deptRecord createDeptRecord(string did, string dname, string budget, string managerid) {
-    struct deptRecord returnRecord;
-    returnRecord.did = stoi(did);
-    returnRecord.dname = dname;
-    returnRecord.budget = stof(budget);
-    returnRecord.managerid = stoi(managerid);
+struct deptRecord* createDeptRecord(string did, string dname, string budget, string managerid) {
+    struct deptRecord* returnRecord = new deptRecord;
+    returnRecord->did = stoi(did);
+    returnRecord->dname = dname;
+    returnRecord->budget = stof(budget);
+    returnRecord->managerid = stoi(managerid);
     return returnRecord;
 }
 
 // Indexed at 0
-struct deptRecord getDeptRecord(int index) {
+struct deptRecord* getDeptRecord(int index) {
     vector<string> csvAttributes;
     string attribute; // For tokenizing csv lines
     string line = getLineOfFile("Dept.csv", index + 1); // File lines start at 1
@@ -360,33 +383,6 @@ struct deptRecord getDeptRecord(int index) {
     return createDeptRecord(csvAttributes[0], csvAttributes[1], csvAttributes[2], csvAttributes[3]);
 }
 
-
-/*
-vector<struct record> readRecordsAtIndex(string index){
-    vector<struct record> records;
-    vector<string> attributes;
-    string record; // For tokenizing the line
-    string attribute; // For tokenizing the line
-    ifstream infile("EmployeeIndex");
-
-    int linenumber = getIndexLineNumber(index);
-    string line = getLineOfIndex(linenumber);
-    line = line.substr(index.length() + 1, line.length()); // remove key from front of line
-
-    stringstream linestream(line);
-
-    while (getline(linestream, record, '|'))
-    {
-        stringstream recordstream(record);
-        while (getline(recordstream, attribute, ',')) {
-            attributes.push_back(attribute);
-        }
-        records.push_back(*add_record(attributes[0], attributes[1], attributes[2], attributes[3]));
-        attributes.clear();
-    }
-    return records;
-}
-*/
 
 int countLinesOfFile(string filename ) {
     string line;
